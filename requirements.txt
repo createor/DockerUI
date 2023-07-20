@@ -1,0 +1,7 @@
+fastapi==0.83.0
+uvicorn==0.20.0
+docker==5.0.3
+websockets==10.4
+python-jose==3.3.0
+captcha==0.4
+psutil==5.9.5

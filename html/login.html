@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <link rel="icon" href="./favicon.ico" type="image/x-icon"/>
+    <link rel="stylesheet" href="./statics/layui/css/layui.css">
+    <script src="./statics/layui/layui.js"></script>
+    <style>
+        *.body {
+            margin: 0;
+            padding: 0;
+        }
+        html, body, .container {
+            width: 100%;
+            height: 100%;
+        }
+        .container {
+            background-image: url(./background.jpg);
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        .login-container {
+            width: 320px;
+        }
+    </style>
+</head>
+<body>
+    <div style="width: 100%;height: 100%;">
+        <div class="container" style="position: relative;">
+            <div style="background-color: white; position: absolute;right: 100px; top: 30%; padding: 50px;border: 1px solid black; border-radius: 5px;box-shadow: 3px 3px 3px 0px grey;">
+                <form class="layui-form">
+                    <div class="login-container">
+                        <div class="layui-form-item" style="font-size: 16px;font-weight: bolder;text-align: center;padding-bottom: 10px;">
+                            <span>登录</span>
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-wrap">
+                              <div class="layui-input-prefix">
+                                <i class="layui-icon layui-icon-username"></i>
+                              </div>
+                              <input type="text" name="username" value="" lay-verify="required" placeholder="用户名" lay-reqtext="请填写用户名" autocomplete="off" class="layui-input" lay-affix="clear">
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-wrap">
+                                <div class="layui-input-prefix">
+                                    <i class="layui-icon layui-icon-password"></i>
+                                </div>
+                                <input type="password" name="password" value="" lay-verify="required" placeholder="密  码" lay-reqtext="请填写密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-row">
+                                <div class="layui-col-xs7">
+                                    <div class="layui-input-wrap">
+                                        <div class="layui-input-prefix">
+                                            <i class="layui-icon layui-icon-vercode"></i>
+                                        </div>
+                                        <input type="text" name="captcha" maxlength="6" value="" lay-verify="required" placeholder="验证码" lay-reqtext="请填写验证码" autocomplete="off" class="layui-input" lay-affix="clear">
+                                    </div>
+                                </div>
+                                <div class="layui-col-xs5">
+                                    <div style="margin-left: 10px;">
+                                        <img src="" height="38px" width="123px" id="captcha-img">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="login">登录</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    // 设置浏览器缩放比例
+    // window.onload = function () {
+    //     document.body.style.zoom = "80%";
+    // }
+</script>
+<script>
+    layui.use(['layer'], function () {
+        var layer = layui.layer;
+        function getUrlParam (url, param) {
+            if (url === '') return '';
+            var urlStr = url.split('?')[1];
+            var obj = {};
+            var paramsArr = urlStr.split('&');
+            if (paramsArr.length > 0) {
+                for(var i = 0,len = paramsArr.length;i < len;i++){
+		            var arr = paramsArr[i].split('=');
+                    if (arr.length === 2) {
+                        obj[arr[0]] = arr[1];
+                    }
+	            }
+                return obj[param];
+            }	        
+	        return '';
+        }
+        var errMsg = getUrlParam(decodeURI(window.location.search), "error");
+        if (errMsg !== '' && errMsg !== undefined) {
+            layer.msg(errMsg, {icon: 5, time: 2000});
+            history.pushState(null, null, window.location.pathname);
+        }
+    });
+</script>
+<script>
+    layui.use(['form', 'jquery', 'layer'], function (){
+        var form = layui.form;
+        var layer = layui.layer;
+        var $ = layui.jquery;
+
+        // 加载验证码图片
+        function loadCaptcha () {
+            $.ajax({
+                type: 'get',
+                url: '/api/user/captcha',
+                success: function (res) {
+                    if (res.code === 0) {
+                        $('#captcha-img').attr("src", res.data);
+                    }
+                }
+            });
+        }
+
+        loadCaptcha();
+
+        $('#captcha-img').on('click', function () {
+            loadCaptcha();
+        });
+
+        form.on('submit(login)', function (data) {
+            var field = data.field; // 获取表单值
+            $.ajax({
+                type: 'post',
+                url: '/api/user/login',
+                data: field,
+                success: function (res) {
+                    if (res.code !== 0) {
+                        layer.msg(res.msg, {icon: 2});
+                        return false;
+                    } else {
+                        window.localStorage.setItem("username", field.username); // 存储用户名
+                        window.localStorage.setItem("token", res.access_token); // 存储token
+                        window.location.href = window.location.origin + "/"; // 跳转到首页
+                    }
+                },
+                error: function (err) {
+                    if (err.responseJSON !== undefined) {
+                        if (err.responseJSON.detail === '验证码错误' || err.responseJSON.detail === '验证码过期') {
+                            loadCaptcha();
+                        }
+                        layer.msg(err.responseJSON.detail, {icon: 2, time: 2000});
+                    } else {
+                        layer.msg('登录失败', {icon: 2, time: 2000});
+                    }
+                    return false;   
+                }
+            });
+            return false; // 阻止默认form跳转行为
+        });
+    });
+</script>
+</html>

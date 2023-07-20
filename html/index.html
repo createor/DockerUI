@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DockerUI</title>
+    <link rel="icon" href="./favicon.ico" type="image/x-icon"/>
+    <link rel="stylesheet" href="./statics/layui/css/layui.css">
+    <script src="./statics/layui/layui.js"></script>
+    <script src="./statics/js/echarts.min.js"></script>
+    <script>
+        // 校验是否登录
+        const token = window.localStorage.getItem("token") || ''; // 获取token
+        if (token === '') { // token不存在则跳转到登录页
+            window.location.href = window.location.origin + "/login.html?error=请先登录";
+        } else {
+            // 校验token是否有效
+            var $ = layui.jquery;
+            $.ajax({
+                type: 'get',
+                url: '/api/user/auth',
+                headers: {Authorization: 'Bearer ' + token},
+                error: function () {
+                    window.location.href = window.location.origin + "/login.html?error=登录过期";
+                }
+            });
+        }
+    </script>
+    <style>
+        #show-dashboard {
+            display: block;
+        }
+        /* 初始化为不可见 */
+        #show-image-list, #show-user-manage, #show-container-list, #show-system-setting, #show-log-record {
+            display: none;
+        }
+        /* logo */
+        .icon-docker {
+            background-image: url(./statics/icons/docker.png);
+            background-repeat: no-repeat;
+            background-size: 30px;
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            vertical-align: -webkit-baseline-middle;
+            margin-right: 10px;
+        }
+        .layui-panel,.layui-panel i {
+            font-size: 20px;
+        }
+        .layui-panel div>span {
+            font-size: 18px;
+            height: 20px;
+            vertical-align: bottom;
+            margin-left: 10px;
+        }
+        #cpu-info, #mem-info {
+            width: 300px;
+            height: 300px;
+        }
+        .layui-layer-default .layui-layer-content {
+            background-color: black;;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="layui-layout layui-layout-admin">
+            <div class="layui-header">
+                <!-- 头部logo -->
+                <div class="layui-logo layui-xs layui-bg-black">
+                    <div>
+                        <i class="icon-docker"></i><span>DockerUI</span>
+                    </div>
+                </div>
+                <!-- 头部面包屑 -->
+                <div class="layui-nav layui-layout-left" style="height: 100%;padding-top: 22px;" id="breadcrumb">
+                    <span class="layui-breadcrumb" lay-filter="breadcrumb">
+                        <a href="javascript:;">仪表盘</a>
+                    </span>
+                </div>
+                <!-- 头部右侧用户信息 -->
+                <ul class="layui-nav layui-layout-right">      
+                    <li class="layui-nav-item" lay-unselect>
+                        <a href="javascript:;">
+                            <span id="user">用户名</span>
+                            <img src="./statics/icons/header.png" class="layui-nav-img">
+                        </a>
+                        <dl class="layui-nav-child">
+                            <dd style="text-align: center;"><a href="javascript:;" id="changePassword">修改密码</a></dd>
+                            <hr>
+                            <dd style="text-align: center;"><a href="javascript:;" id="logout">退出</a></dd>
+                        </dl>
+                    </li>
+                </ul>
+            </div>
+            <!-- 左侧菜单栏 -->
+            <div class="layui-side layui-bg-black">
+                <ui class="layui-nav layui-nav-tree" lay-filter="menu">
+                    <li class="layui-nav-item layui-this">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-console" style="padding-right: 5px;"></i>仪表盘</a>
+                    </li>
+                    <li class="layui-nav-item">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-app" style="padding-right: 5px;"></i>镜像列表</a>
+                    </li>
+                    <li class="layui-nav-item">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-app" style="padding-right: 5px;"></i>容器列表</a>
+                    </li>
+                    <li class="layui-nav-item">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-user" style="padding-right: 5px;"></i>用户管理</a>
+                    </li>
+                    <li class="layui-nav-item">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-set" style="padding-right: 5px;"></i>系统设置</a>
+                    </li>
+                    <li class="layui-nav-item">
+                        <a href="javascript:;"><i class="layui-icon layui-icon-log" style="padding-right: 5px;"></i>操作日志</a>
+                    </li>
+                </ui>
+            </div>
+            <!-- 内容显示区域 -->
+            <div class="layui-body">
+                <div style="padding: 15px;">
+                    <div id="show-dashboard">
+                        <div class="layui-row layui-col-space16">
+                            <div class="layui-col-md6">
+                                <div class="layui-panel">
+                                    <div style="padding: 32px;">镜像数量<i style="margin-left: 3px;" class="layui-icon layui-icon-app"></i>: <span class="layui-badge">7</span></div>
+                                </div>
+                            </div>
+                            <div class="layui-col-md6">
+                                <div class="layui-panel">
+                                    <div style="padding: 32px;">容器数量<i style="margin-left: 3px;" class="layui-icon layui-icon-app"></i>: <span class="layui-badge layui-bg-green">7</span></div>
+                                </div>
+                            </div>
+                            <div class="layui-col-md6">
+                                <div class="layui-panel">
+                                    <div style="padding: 32px;">用户数量<i style="margin-left: 3px;" class="layui-icon layui-icon-username"></i>: <span class="layui-badge layui-bg-cyan">7</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div>
+                            <div style="padding: 40px;display: inline-block;">
+                                <div id="cpu-info"></div>
+                            </div>
+                            <div style="padding: 40px;display: inline-block;margin-left: 40px;">
+                                <div id="mem-info"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="show-image-list">
+                        <form action="" class="layui-form">
+                            <div class="layui-form-item">
+                                <div class="layui-input-inline" style="width: 400px;">
+                                    <input type="text" class="layui-input" placeholder="请输入镜像名称" lay-affix="clear">
+                                </div>
+                                <div class="layui-btn-container">
+                                    <button type="button" class="layui-btn" lay-submit lay-filter="search"><i class="layui-icon layui-icon-search"></i>搜索</button>
+                                </div>
+                            </div>
+                        </form>
+                        <div>
+                            <div style="float:right;margin-bottom: 10px;margin-right: 10px;">
+                                <div class="layui-btn-container">
+                                    <button type="button" class="layui-btn" id="define-image">自定义镜像</button>
+                                    <button type="button" class="layui-btn" id="upload-image">从本地上传镜像</button>
+                                    <button type="button" class="layui-btn" id="download-image">从仓库下载镜像</button>
+                                </div>
+                            </div>
+                        </div>
+                        <table class="layui-hide" id="image-list" lay-filter="image-list"></table>
+                    </div>
+                    <div id="show-container-list">
+                        <table class="layui-hide" id="container-list" lay-filter="container-list"></table>
+                    </div>
+                    <div id="show-user-manage">
+                        <div style="float: right;margin-bottom: 10px;">
+                            <button class="layui-btn" id="addUser">新建用户<i class="layui-icon layui-icon-addition"></i></button>
+                        </div>
+                        <table class="layui-hide" id="user-manage" lay-filter="user-manage"></table>
+                    </div>
+                    <div id="show-system-setting">
+                        <form class="layui-form" action="" lay-filter="system-setting">
+                            <div class="layui-form-item">
+                                <div>
+                                    <label class="layui-form-label" style="width: 100px;">Docker版本:</label>
+                                    <div class="layui-input-block"">
+                                        <input type="text" value="未检测到Docker" readonly style="border: none;width: 100px;vertical-align:sub;">
+                                        <button type="submit" class="layui-btn layui-btn-sm">一键安装Docker</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div>
+                                    <label class="layui-form-label" style="width: 100px;">设置仓库地址:</label>
+                                    <div class="layui-input-block">
+                                        <div class="layui-input-block" style="margin-left: 20px;width:230px;">
+                                            <input type="text" name="repository-address" value="" class="layui-input" autocomplete="off" placeholder="仓库地址" lay-affix="clear">
+                                        </div>
+                                        <div class="layui-input-block" style="margin-left: 20px;width:230px;">
+                                            <label style="width:100%;text-align:left;padding-left: 0;" class="layui-form-label">用户登录(可选填)</label>
+                                        </div>
+                                        <div class="layui-input-block" style="margin-left: 20px;width:230px;">
+                                            <input type="text" name="repository-username" value="" class="layui-input" autocomplete="off" placeholder="请输入用户名" style="width:230px;" lay-affix="clear">
+                                            <input type="password" name="repository-password" value="" class="layui-input" autocomplete="off" placeholder="请输入密码" style="width:230px;margin-top:5px;" lay-affix="eye">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-wrap">
+                                    <label class="layui-form-label" style="width: 100px;">设置服务端口:</label>
+                                    <div class="layui-input-block">
+                                        <fieldset class="layui-elem-field layui-field-title" style="width: 400px;">
+                                            <legend>web</legend>
+                                        </fieldset>
+                                        <div class="layui-input-block" style="margin-left: 0;">
+                                            <div class="layui-input-inline">
+                                                <label class="layui-form-label">http:</label>
+                                                <div class="layui-input-block" style="width:100px;">
+                                                    <input type="text" value="80" autocomplete="off" placeholder="http端口" class="layui-input">
+                                                </div>
+                                            </div>
+                                            <div class="layui-input-inline">
+                                                <label class="layui-form-label">https:</label>
+                                                <div class="layui-input-block" style="width:100px;">
+                                                    <input type="text" value="443" autocomplete="off" placeholder="https端口" class="layui-input">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-input-block">
+                                        <fieldset class="layui-elem-field layui-field-title"  style="width: 400px;margin-left: 20px;">
+                                            <legend>app</legend>
+                                        </fieldset>
+                                        <div class="layui-input-block" style="margin-left: 0;">
+                                            <label class="layui-form-label">应用:</label>
+                                            <div class="layui-input-block" style="width:100px;">
+                                                <input type="text" value="8080" class="layui-input" autocomplete="off" placeholder="应用端口">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div>
+                                    <label class="layui-form-label" style="width: 100px;">是否开启SSL:</label>
+                                    <div class="layui-input-block">
+                                        <input type="radio" name="ssl" value="yes" lay-filter="ssl" title="是">
+                                        <span style="display: inline-block;width: 30px;"></span>
+                                        <input type="radio" name="ssl" value="no" lay-filter="ssl" title="否" checked>
+                                    </div>
+                                    <div class="layui-input-block" id="ssl-manage" style="display: none;">
+                                        <button style="margin-top: 5px;" class="layui-btn layui-btn-sm">证书管理</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label" style="width: 100px;">白名单设置:</label>
+                                <div class="layui-input-block">
+                                    <div>
+                                        <input type="radio" name="ip-list" value="close" title="关闭" lay-filter="ip-list" checked>
+                                    </div>
+                                    <div>
+                                        <input type="radio" name="ip-list" value="open" lay-filter="ip-list" title="开启">
+                                        <button style="vertical-align: bottom;display: none;" id="list-manage" type="submit" class="layui-btn layui-btn-sm" lay-submit lay-filter="manage">白名单管理</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button style="margin-top: 20px;" type="submit" class="layui-btn" lay-submit lay-filter="apply">应用修改</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="show-log-record">
+                        <form action="" class="layui-form">
+                            <div class="layui-form-item">
+                                <div class="layui-input-block" style="margin-left: 10px;">
+                                    <div class="layui-inline" style="margin-right: 10px;">
+                                        <input type="text" name="operateUser" autocomplete="off" class="layui-input" placeholder="输入操作用户" style="width: 200px;" lay-affix="clear">
+                                    </div>
+                                    <div class="layui-inline">
+                                        <select name="operateType" style="width:150px;">
+                                            <option value="">选择操作类型</option>
+                                            <option value="1">登入登出</option>
+                                            <option value="2">镜像操作</option>
+                                            <option value="3">容器操作</option>
+                                            <option value="4">用户操作</option>
+                                            <option value="5">系统设置</option>
+                                        </select>
+                                    </div>
+                                    <div class="layui-inline">
+                                        <label class="layui-form-label" style="margin-left: 0;padding-left: 0;padding-right: 0;width: 70px;text-align: left;">操作日期</label>
+                                        <div class="layui-inline" id="ID-laydate-range">
+                                            <div class="layui-input-inline">
+                                                <input type="text" autocomplete="off" id="operateStart" class="layui-input" placeholder="开始日期">
+                                            </div>
+                                            <div class="layui-form-mid">-</div>
+                                            <div class="layui-input-inline">
+                                                <input type="text" autocomplete="off" id="operateEnd" class="layui-input" placeholder="结束日期">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-inline" style="margin-top: -5px;">
+                                        <button class="layui-btn" lay-submit lay-filter="log-search">搜索</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                        <table class="layui-hide" id="log-record" lay-filter="log-record"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    window.onload = function () {
+        document.getElementById('logout').addEventListener('click', function () {
+            window.localStorage.clear();
+            window.location.href = window.location.origin + "/login.html";
+        });
+    }
+</script>
+<script type="text/html" id="operate">
+    <div class="layui-clear-space">
+        <a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="export">导出<i class="layui-icon layui-icon-export"></i></a>
+        <a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="app-run">运行<i class="layui-icon layui-icon-release"></i></a>
+        <a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="push">推送<i class="layui-icon layui-icon-upload-circle"></i></a>
+        <a href="javascript:;" class="layui-btn layui-btn-xs layui-btn-danger" lay-event="delete">删除<i class="layui-icon layui-icon-delete"></i></a>
+    </div>
+</script>
+<script>
+    layui.use(['element', 'table', 'jquery', 'layer', 'form', 'laydate', 'tree', 'code', 'upload'],function (){
+        var element = layui.element;
+        var table = layui.table;
+        var $ = layui.jquery;
+        var layer = layui.layer;
+        var form = layui.form;
+        var laydate = layui.laydate;
+        var tree = layui.tree;
+        var code = layui.code;
+        var upload = layui.upload;
+
+        $('#upload-image').on('click', function () {
+            layer.open({
+                type: 1,
+                title: '上传镜像',
+                area: '380px',
+                content: `
+                  <div style="padding:10px">
+                    <div class="layui-upload-drag" style="display:block;" id="upload-drag">
+                      <i class="layui-icon layui-icon-upload"></i>
+                      <div>点击上传,或将文件拖拽到此处</div>
+                    </div>  
+                  </div>
+                `,
+                success: function () {
+                    upload.render({
+                        elem: '#upload-drag',
+                        url: '/api/',
+                        headers: {Authorization: 'Bearer ' + token},
+                        accept: 'file',
+                        acceptMime: '',
+                        exts: 'tar',
+                        size: 1,
+                        done: function () {
+                            // 上传成功
+                        }
+                    })
+                }
+            });
+        });
+
+        $('#download-image').on('click', function () {
+
+        });
+
+        // 生成图表
+        var cpuChart = echarts.init(document.getElementById('cpu-info'));
+        cpuChart.setOption({
+            title: {
+                text: 'CPU详情'
+            },
+            series: [
+                {
+                    type: 'gauge',
+                    axisLine: {
+                      lineStyle: {
+                        width: 20,
+                        color: [
+                          [0.5, '#0e8f0e'],
+                          [0.8, '#dfdf3d'],
+                          [1, '#fd666d']
+                        ]
+                      }
+                    },
+                    pointer: {
+                      itemStyle: {
+                        color: 'auto'
+                      }
+                    },
+                    axisTick: {
+                      distance: -20,
+                      length: 8,
+                      lineStyle: {
+                        color: '#fff',
+                        width: 2
+                      }
+                    },
+                    splitLine: {
+                      distance: -35,
+                      length: 20,
+                      lineStyle: {
+                        color: '#fff',
+                        width: 4
+                      }
+                    },
+                    axisLabel: {
+                      color: 'inherit',
+                      distance: 40,
+                      fontSize: 16
+                    },
+                    detail: {
+                      valueAnimation: true,
+                      formatter: '{value} %',
+                      color: 'inherit'
+                    },
+                    data: [
+                      {
+                        value: 0
+                      }
+                    ]
+                }
+            ]
+        });
+        var memChart = echarts.init(document.getElementById('mem-info'));
+        memChart.setOption({
+            title: {
+                text: '内存详情'
+            },
+            xAxis: {
+              type: 'category',
+              data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            },
+            yAxis: {
+              type: 'value'
+            },
+            series: [
+              {
+                data: [150, 230, 224, 218, 135, 147, 260],
+                type: 'line'
+              }
+            ]
+        });
+
+        // setInterval(function () {
+        //     $.ajax({
+        //         type: 'get',
+        //         url: '/api/info/system',
+        //         success: function (res) {
+        //             if (res.code === 0) {
+        //                 cpuChart.setOption({
+        //                     series: [{
+        //                         data: [{
+        //                             value: parseInt(res.data.cpu_usage)
+        //                         }]
+        //                     }]
+        //                 });
+        //             }
+        //         }
+        //     });
+        //     return false;
+        // }, 5000);
+
+        // 右上角用户名设置
+        $('#user').text(window.localStorage.getItem('username') || '');
+        // 用户修改密码事件
+        $('#changePassword').on('click', function () {
+            layer.open({
+                type: 1,
+                title: '修改密码',
+                area: '350px',
+                resize: false,
+                content: `
+                    <div class="layui-form" style="padding: 15px;">
+                        <div class="layui-form-item">
+                            <div class="layui-input-wrap">
+                                <div class="layui-input-prefix">
+                                    <i class="layui-icon layui-icon-password"></i>
+                                </div>
+                                <input type="password" name="oldPassword" value="" lay-verify="required" placeholder="旧密码" lay-reqtext="请填写旧密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                            </div>    
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-wrap">
+                                <div class="layui-input-prefix">
+                                    <i class="layui-icon layui-icon-password"></i>
+                                </div>
+                                <input type="password" name="newPassword" value="" lay-verify="required" placeholder="新密码" lay-reqtext="请填写新密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                            </div>    
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-wrap">
+                                <div class="layui-input-prefix">
+                                    <i class="layui-icon layui-icon-password"></i>
+                                </div>
+                                <input type="password" name="confirmPassword" value="" lay-verify="required" placeholder="确认新密码" lay-reqtext="请确认新密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                            </div>    
+                        </div>
+                        <div class="layui-form-item">
+                            <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="change">应用修改</button>
+                        </div>
+                    </div>
+                `,
+                success: function () {
+                    form.render();
+                    form.on('submit(change)', function (data) {
+                        var field = data.field;
+                        if (field.newPassword === field.oldPassword) {
+                            layer.msg('新旧密码不能一样', {icon: 2});
+                            return;
+                        }
+                        if (field.newPassword.length < 6) {
+                            layer.msg('新密码长度不能小于6位', {icon: 2});
+                            return;
+                        }
+                        if (field.confirmPassword !== field.newPassword) {
+                            layer.msg('确认密码与新密码不一致', {icon: 2})
+                            return;
+                        }
+                        $.ajax({
+                            type: 'post',
+                            url: '/api/user/password',
+                            headers: {Authorization: 'Bearer ' + token},
+                            data: field,
+                            success: function (res) {
+                                if (res.code !== 0) {
+                                    layer.msg(res.msg, {icon: 2});
+                                } else {
+                                    layer.closeAll();  // 修改成功后关闭弹出层
+                                    layer.msg('修改密码成功', {icon: 1});
+                                }
+                            },
+                            error: function (err) {
+                                if (err.responseJSON !== undefined) {
+                                    layer.msg(err.responseJSON.detail, {icon: 2});
+                                } else {
+                                    layer.msg('修改密码失败', {icon: 2});
+                                }
+                            }
+                        });
+                        return false;
+                    });
+                }
+            });
+        });
+
+        // 菜单点击事件
+        element.on('nav(menu)', function (elem) {
+            var routes_map = {
+                '仪表盘' : 'show-dashboard',
+                '镜像列表': 'show-image-list',
+                '容器列表': 'show-container-list',
+                '用户管理': 'show-user-manage',
+                '系统设置': 'show-system-setting',
+                '操作日志': 'show-log-record'
+            }
+            var route_values = Object.values(routes_map);
+            route_values.forEach(item => {
+                $('#' + item).hide();
+            });
+            for (var key in routes_map) {
+                if (key === elem.text()) {
+                    $('#' + routes_map[key]).show();
+                    renderBread(elem.text());
+                    break;
+                }
+            }
+        });
+
+        // 渲染镜像列表数据
+        table.render({
+            elem: '#image-list',
+            url: '/api/image/list',
+            headers: {Authorization: 'Bearer ' + token},
+            cols: [[
+                {field: 'id', title: '镜像ID'},
+                {field: 'name', title: '镜像名称', sort: true},
+                {field: 'tag', title: '标签'},
+                {fixed: 'right', title: '操作', toolbar: '#operate'}
+            ]]
+        });
+
+        // 镜像列表工具栏事件
+        table.on('tool(image-list)', function (obj) {
+            var data = obj.data;
+            var layEvent = obj.event;
+            if (layEvent === 'export') {
+                layer.open({
+                    title: '导出',
+                    type: 1,
+                    area: '350px',
+                    content: `
+                      <div style="padding: 20px;">
+                        <input type="text" placeholder="请输入文件名" value="${data.name}" autocomplete="off" id="filename" class="layui-input" lay-affix="clear">
+                        <button class="layui-btn layui-btn-fluid" style="margin-top: 10px;" onclick="download('${data.name}')">下载</button>
+                      </div>
+                    `
+                })
+            }
+            if (layEvent === 'app-run') {
+                layer.open({
+                    type: 1,
+                    title: '运行',
+                    area: '450px',
+                    content: `
+                      <div>
+                        <div class="layui-tab layui-tab-brief">
+                          <ul class="layui-tab-title">
+                          <li class="layui-this">配置</li>
+                          <li><i class="layui-icon layui-icon-fonts-code"></i></li>  
+                          </ul>
+                          <div class="layui-tab-content">
+                            <div class="layui-tab-item layui-show">
+                              <form>
+                                
+                              </form>
+                            </div>
+                            <div class="layui-tab-item">
+                              <pre class="pre-code">
+                                from python as builder
+                              </pre>  
+                            </div>
+                          </div>    
+                        </div>
+                      </div>
+                    `,
+                    success: function () {
+                        // 代码
+                        code({
+                            elem: '.pre-code',
+                            skin: 'dark',
+                            onCopy: function (code){
+                                // 复制到剪切板
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // 下载镜像文件
+        download = function (name) {
+            layer.closeAll();
+            var filename = $('#filename').val();
+            $.ajax({
+                type: 'get',
+                url: '/api/image/export?name=' + name,
+                success: function (response) {
+                    const url = window.URL.createObjectURL(response);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.style.display = 'none';
+                    a.download = filename + '.tar'; // 自定义文件名
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }
+            });
+        }
+
+        // 渲染容器列表数据
+        table.render({
+            elem: '#container-list',
+            url: '/api/container/list',
+            headers: {Authorization: 'Bearer ' + token},
+            cols: [[
+                {field: 'id', title: '容器ID', width: 200},
+                {field: 'name', title: '容器名称', width: 200, edit: 'text'},
+                {field: 'status', title: '状态', width: 200, templet: function (d) {
+                    if (d.status === 'exited') {
+                        return '<span class="layui-badge layui-bg-red">' + d.status + '</span>';
+                    } else {
+                        return '<span class="layui-badge layui-bg-green">' + d.status + '</span>';
+                    }
+                }},
+                {field: 'operate', fixed: 'right', title: '操作', templet: function (d){
+                    var detailBtn = '<a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="detail">详情<i class="layui-icon layui-icon-tips"></i></a>';
+                    var logBtn = '<a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="log">日志<i class="layui-icon layui-icon-list"></i></a>';
+                    var attachBtn = '<a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="attach">连接<i class="layui-icon layui-icon-link"></i></a>';
+                    var saveBtn ='<a href="javascript:;" class="layui-btn layui-btn-xs" lay-event="save">保存为镜像<i class="layui-icon layui-icon-file"></i></a>';
+                    var delBtn = '<a href="javascript:;" class="layui-btn layui-btn-xs layui-btn-danger" lay-event="delete">删除<i class="layui-icon layui-icon-delete"></i></a>';
+                    if (d.status === 'exited') {
+                        return detailBtn +'<a class="layui-btn layui-btn-xs" lay-event="start">启动<i class="layui-icon layui-icon-play"></i></a>' + logBtn + attachBtn + saveBtn + delBtn;
+                    } else {
+                        return detailBtn + '<a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="stop">停止<i class="layui-icon layui-icon-pause"></i></a>' + logBtn + attachBtn + saveBtn + delBtn;
+                    }
+                }}
+            ]]
+        });
+        // 编辑容器名称事件
+        table.on('edit(container-list)', function (obj) {
+            var field = obj.field;
+            var afterValue = obj.value;
+            layer.msg('修改成功', {icon: 1});
+        });
+        // 容器列表工具栏事件
+        table.on('tool(container-list)', function (obj) {
+            var data = obj.data;
+            var layEvent = obj.event;
+            if (layEvent === 'save') {
+                layer.prompt({
+                    title: '自定义镜像名'
+                }, function(value, index, elem) {
+                    if (value === '') return elem.focus();
+                    console.log(value);
+                    layer.close(index);
+                });
+            }
+            if (layEvent === 'delete') {
+                layer.confirm('是否删除此容器', {icon: 3}, function (){
+                    if (data.status !== 'exited') {
+                        layer.msg('请先停止容器', {icon: 2});
+                    } else {
+                        obj.del();
+                        layer.closeAll();
+                    }
+                }, function () {
+                    layer.closeAll();
+                });
+            }
+            if (layEvent === 'start' || layEvent === 'stop') {
+                if (layEvent === 'stop') {
+                    var operateType = '2';
+                    var newStatus = 'exited';
+                }
+                if (layEvent === 'start') {
+                    var operateType = '1';
+                    var newStatus = 'running';
+                }
+                $.ajax({
+                    type: 'post',
+                    url: '/api/container/operate',
+                    headers: {Authorization: 'Bearer ' + token},
+                    contentType: "application/json; charset=utf-8",
+                    dataType: 'JSON',
+                    data: JSON.stringify({id: data.id, name: data.name, operateType: operateType}),
+                    success: function () {
+                        obj.update({
+                            status: newStatus
+                        }, true);
+                        layer.msg('操作成功', {icon: 1});
+                    },
+                    error: function () {
+                        layer.msg('操作失败', {icon: 2});
+                    }
+                });
+            }
+            if (layEvent === 'log') {
+                layer.open({
+                    title: '日志',
+                    type: 1,
+                    area: ['520px', '400px'],
+                    content: '<div style="padding: 11px;white-space: pre-wrap;" id="log-content"></div>'
+                });
+                flow(data.name);
+            }
+            if (layEvent === 'attach') {
+                if (data.status === 'exited') {
+                    layer.msg('容器未启动', {icon: 2});
+                } else {
+                    layer.open({
+                        type: 1,
+                        title: '连接',
+                        area: ['520px', '400px'],
+                        skin: 'layui-layer-default',
+                        move: false,
+                        content: `
+                            <div style="padding:10px;min-width:max-content;min-width:-webkit-max-content;" id="attach-content">
+                                <div class="layui-input-group" style="font-size:14px;color:white;width:100%;">
+                                    <span style="width:18px;">$</span>
+                                    <input type="text" style="width:100%;border:none;background-color:black;height:14px;color:white;">
+                                </div>
+                            </div>
+                        `
+                    });
+                    attach(data.name);
+                }
+            }
+        });
+
+
+        // 连接容器
+        function attach(name) {
+            var protocol = window.location.protocol === 'http:' ? 'ws' : 'wss';
+            var ws = new WebSocket(protocol + '://' + window.location.host + '/api/container/ws/' + name);
+            ws.onmessage = function (event) {
+                $('#attach-content .layui-input-group').before('<div style="color: white;"><span style="padding-right: 10px;display: table-cell;">$</span><span style="display: table-cell;white-space: pre-wrap;">' + event.data + '</span></div>');
+            }
+            $('#attach-content input').bind('keypress', function(event) {
+                if (event.keyCode == "13") {
+                    event.preventDefault();
+                    var that = this
+                    $('#attach-content .layui-input-group').before('<div style="color: white;"><span style="padding-right:10px;">$</span><span>' + that.value + '</span></div>');
+                    if (that.value.trim().length !== 0) {
+                        ws.send(that.value);
+                    }
+                    that.value = '';
+                }
+            });
+            
+        }
+
+        // 日志流加载
+        function flow(name) {
+            fetch('/api/container/log/' + name, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'Authorization': 'Bearer ' + token
+                }
+            }).then(res => {
+                const reader = res.body.getReader();
+                return new ReadableStream({
+                    start(controller) {
+                        function push() {
+                            reader.read().then(( {done, value} ) => {
+                                if (done) {
+                                    controller.close();
+                                    return;
+                                }
+                                controller.enqueue(value);
+                                push();
+                            });
+                        }
+                        push();
+                    }
+                });
+            }).then(stream => {
+                const reader = stream.getReader();
+                const decoder = new TextDecoder('utf-8');
+                function processStream ({done, value}) {
+                    if (done) return;
+                    const text = decoder.decode(value);
+                    displayData(text);
+                    return reader.read().then(processStream);
+                }
+                return reader.read().then(processStream);
+            }).catch(error => {
+                console.log(error);
+            });
+        }
+        function displayData (data) {
+            const displayDiv = document.getElementById('log-content');
+            displayDiv.innerHTML += data;
+        }
+
+        // 动态渲染面包屑
+        function renderBread (data) {
+            $('#breadcrumb').html(`
+                <span class="layui-breadcrumb" lay-filter="breadcrumb">
+                    <a href="javascript:;">${data}</a>
+                </span>
+            `);
+            element.render('breadcrumb', 'breadcrumb');
+        }
+
+        // 渲染用户列表数据
+        table.render({
+            elem: '#user-manage',
+            url: '/api/user/list',
+            headers: {Authorization: 'Bearer ' + token},
+            page: true,
+            limit: 10,
+            limits: [8, 10, 15],
+            cols: [[
+                {field: 'id', title: 'ID'},
+                {field: 'name', title: '用户名'},
+                {field: 'status', title: '状态', templet: function (d) {
+                    if (d.status) {
+                        return '<input type="checkbox" name="status" lay-skin="switch" value="' + d.id + '-' + d.name + '" lay-filter="switchStatus" checked>';
+                    } else {
+                        return '<input type="checkbox" name="status" lay-skin="switch" value="' + d.id + '-' + d.name + '" lay-filter="switchStatus">';
+                    }
+                }},
+                {field: 'privilege', title: '权限', templet: function (d) {
+                    return '<a lay-event="edit">编辑权限<i class="layui-icon layui-icon-edit"></i><a>';
+                }}
+            ]]
+        });
+
+        // 编辑用户权限
+        table.on('tool(user-manage)', function (obj) {
+            var data = obj.data;
+            var layEvent = obj.event;
+            if (layEvent === 'edit') {
+                layer.open({
+                    type: 1,
+                    title: '菜单权限',
+                    area: ['320px','350px'],
+                    resize: false,
+                    content: `
+                      <div>
+                        <div id="menu-tree"></div>
+                        <div style="padding: 20px;position: absolute;bottom: 0;width: calc(100% - 40px);">
+                          <button class="layui-btn layui-btn-fluid" onclick="applyMenu(${data.id}, '${data.name}');" >应用修改</button>
+                        </div>
+                      </div>
+                    `
+                });
+                loadTree(data.id);
+            }
+        });
+
+        // 加载权限树数据
+        function loadTree(uid) {
+            $.ajax({
+                type: 'get',
+                url: '/api/user/menu',
+                headers: {Authorization: 'Bearer ' + token},
+                success: function (res) {
+                    tree.render({
+                        id: 'user-menu-tree',
+                        elem: '#menu-tree',
+                        data: [{title: '全选', id: 'all', field: 'all', checked: false, spread: true, children: res.data}],
+                        showCheckbox: true
+                    });
+                    loadCheckedTree(uid);
+                }
+            });
+        }
+
+        // 加载已选菜单列表
+        function loadCheckedTree(uid) {
+            $.ajax({
+                type: 'get',
+                url: '/api/user/menu?uid=' + uid,
+                headers: {Authorization: 'Bearer ' + token},
+                success: function (res) {
+                    var hasCheckId = [];
+                    res.data.forEach(item => {
+                        hasCheckId.push(item.id);
+                    });
+                    tree.setChecked('user-menu-tree', hasCheckId);
+                }
+            });
+        }
+
+        // 应用修改菜单权限
+        applyMenu = function (id, name){
+            var hasChecked = [];
+            tree.getChecked('user-menu-tree')[0].children.forEach(item => {
+                hasChecked.push(item.id);
+            })
+            $.ajax({
+                type: 'post',
+                url: '/api/user/bind',
+                headers: {Authorization: 'Bearer ' + token},
+                contentType: "application/json; charset=utf-8",
+                dataType: 'JSON',
+                data: JSON.stringify({uid: id, name: name, menu: hasChecked}),
+                success: function (res) {
+                    if (res.code === 0) {
+                        layer.closeAll();
+                        layer.msg('修改成功', {icon: 1});
+                    }
+                },
+                error: function () {
+                    layer.msg('修改失败', {icon: 2});
+                }
+            });
+        }
+
+        // 修改用户状态
+        form.on('switch(switchStatus)', function (data) {
+            var tempValue = this.value.indexOf("-");
+            $.ajax({
+                type: 'post',
+                url: '/api/user/status',
+                headers: {
+                    Authorization: 'Bearer ' + token
+                },
+                contentType: "application/json; charset=utf-8",
+                dataType: 'JSON',
+                data: JSON.stringify({id: this.value.substring(0, tempValue), name: this.value.substring(tempValue + 1), status: this.checked}),
+                success: function (res) {
+                    if (res.code === 0) {
+                        layer.msg('修改成功', {icon: 1});
+                    }
+                },
+                error: function () {
+                    layer.msg('修改失败', {icon: 2});
+                }
+            });
+        });
+
+        // 新建用户事件
+        $('#addUser').on('click', function () {
+            layer.open({
+                type: 1,
+                title: '新建用户',
+                area: '350px',
+                resize: false,
+                content: `
+                    <div class="layui-form" style="padding: 20px;">
+                      <div class="layui-form-item">
+                        <div class="layui-input-wrap">
+                          <div class="layui-input-prefix">
+                            <i class="layui-icon layui-icon-username"></i>
+                          </div>
+                          <input type="text" name="newUsername" value="" lay-verify="required" placeholder="请填写用户名" lay-reqtext="请填写用户名" autocomplete="off" class="layui-input" lay-affix="clear">
+                        </div>  
+                      </div>
+                      <div class="layui-form-item">
+                        <div class="layui-input-wrap">
+                          <div class="layui-input-prefix">
+                            <i class="layui-icon layui-icon-password"></i>
+                          </div>
+                          <input type="password" name="newPasswd" value="" lay-verify="required" placeholder="请填写密码" lay-reqtext="请填写密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                        </div>
+                      </div>
+                      <div class="layui-form-item">
+                        <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="newUser">创建</button>
+                      </div>
+                    </div>
+                `,
+                success: function () {
+                    form.render();
+                    form.on('submit(newUser)', function (data) {
+                        var field = data.field;
+                        if (field.newPasswd.length < 6) {
+                            layer.msg('密码长度不能小于6位', {icon: 2});
+                            return;
+                        }
+                        $.ajax({
+                            type: 'post',
+                            url: '/api/user/add',
+                            headers: {Authorization: 'Bearer ' + token},
+                            data: {"username": field.newUsername, "password": field.newPasswd},
+                            success: function (res) {
+                                if (res.code !== 0) {
+                                    layer.msg(res.msg, {icon: 2});
+                                } else {
+                                    layer.closeAll();
+                                }
+                            },
+                            error: function (err) {
+                                if (err.responseJSON !== undefined) {
+                                    layer.msg(err.responseJSON.detail, {icon: 2});
+                                } else {
+                                    layer.msg('新建用户失败失败', {icon: 2});
+                                }
+                            }
+                        });
+                        return false;
+                    });
+                }
+            });
+        });
+
+        // 渲染系统日志列表数据
+        table.render({
+            elem: '#log-record',
+            id: 'log-record',
+            url: '/api/log/record',
+            headers: {Authorization: 'Bearer ' + token},
+            page: true,
+            limits: [8, 10, 15],
+            cols: [[
+                {field: 'user', title: '操作用户'},
+                {field: 'time', title: '操作时间', sort: true},
+                {field: 'type', title: '操作类型', templet: function (d) {
+                    if (d.type === '1') return '登入登出'
+                    if (d.type === '2') return '镜像操作'
+                    if (d.type === '3') return '容器操作'
+                    if (d.type === '4') return '用户操作'
+                    if (d.type === '5') return '系统设置'
+                }},
+                {field: 'content', title: '操作内容'}
+            ]]
+        });
+
+        // 白名单管理页面
+        form.on('submit(manage)', function () {
+            layer.open({
+                type: 1,
+                title: '白名单管理',
+                area: '450px',
+                content: `
+                  <div style="padding:10px;">
+                    <div style="margin-bottom: 5px;">
+                      <button class="layui-btn layui-btn-sm" id="addNewIP">新增IP</button>
+                    </div>
+                    <table class="layui-hide" id="ip-manage" lay-filter="ip-manage"></table>
+                  </div>
+                `,
+                success: function () {
+                    table.render({
+                        elem: '#ip-manage',
+                        url: '/api/config/whitelist',
+                        headers: {Authorization: 'Bearer ' + token},
+                        page: true,
+                        limit: 5,
+                        limits: [3,5,7],
+                        cols: [[
+                            {field: 'id', title: 'ID'},
+                            {field: 'ip', title: 'IP'},
+                            {field: 'operate', title: '操作', templet: function (d) {
+                                return '<button class="layui-btn layui-btn-xs layui-btn-danger" lay-event="delete">删除<i class="layui-icon layui-icon-delete"></i></button>';
+                            }}
+                        ]]
+                    });
+                    table.on('tool(ip-manage)', function (obj) {
+                        var data = obj.data;
+                        var layEvent = obj.event;
+                        if (layEvent === 'delete') {
+                            $.ajax({
+                                type: 'post',
+                                url: '/api/config/delip',
+                                headers: {Authorization: 'Bearer ' + token},
+                                contentType: "application/json; charset=utf-8",
+                                dataType: 'JSON',
+                                data: JSON.stringify({"ip": data.ip}),
+                                success: function (res) {
+                                    if (res.code === 0) {
+                                        obj.del();
+                                        layer.msg('删除成功', {icon: 1});
+                                    } else {
+                                        layer.msg('删除失败', {icon: 2});
+                                    }
+                                },
+                                error: function () {
+                                    layer.msg('删除失败', {icon: 2});
+                                }
+                            })
+                        } 
+                    });
+                    $('#addNewIP').on('click', function () {
+                        layer.prompt({
+                            title: '请输入IP'
+                        }, function (value, index, elem) {
+                            if (value === '') return elem.focus();
+                            $.ajax({
+                                type: 'post',
+                                url: '/api/config/addip',
+                                headers: {Authorization: 'Bearer ' + token},
+                                contentType: "application/json; charset=utf-8",
+                                dataType: 'JSON',
+                                data: JSON.stringify({"ip": value}),
+                                success: function (res) {
+                                    if (res.code === 0) {
+                                        layer.msg('新增成功', {icon: 1});
+                                    } else {
+                                        layer.msg('新增失败', {icon: 2});
+                                    }
+                                },
+                                error: function () {
+                                    layer.msg('新增失败', {icon: 2});
+                                }
+                            });
+                            layer.close(index);
+                        });
+                    });
+                }
+            });
+            return false;
+        });
+
+        // 白名单管理
+        form.on('radio(ip-list)', function (data) {
+            var elem = data.elem;
+            if (elem.value === 'open') {
+                $('#list-manage').show();
+            } else {
+                $('#list-manage').hide();
+            }
+        });
+
+        // ssl证书管理
+        form.on('radio(ssl)', function (data) {
+            var elem = data.elem;
+            if (elem.value === 'yes') {
+                $('#ssl-manage').show();
+            } else {
+                $('#ssl-manage').hide();
+            }
+        });
+
+        // 系统设置应用修改按钮点击事件
+        form.on('submit(apply)', function (data){
+            var field = data.field;
+            console.log(field);
+            return false;
+        });
+    
+        // 日期选择
+        laydate.render({
+            elem: '#ID-laydate-range',
+            type: 'datetime',
+            range: ['#operateStart', '#operateEnd'],
+            format: 'yyyy-MM-dd HH:mm:ss'
+        });
+        // 日志搜索
+        form.on('submit(log-search)', function (data) {
+            var field = data.field;
+            table.reload('log-record', {
+                where: {
+                    operateType: field.operateType,
+                    operateUser: field.operateUser,
+                    operateStart: $('#operateStart').val(),
+                    operateEnd: $('#operateEnd').val()
+                }
+            })
+            return false;
+        });
+    });
+</script>
+</html>
